@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabella Trattamenti Termici Interattiva</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f8;
+            color: #333;
+            line-height: 1.5;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .instructions {
+            font-size: 0.9em;
+            color: #555;
+            margin-bottom: 20px;
+            text-align: left;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0 auto 20px auto; /* Aggiunto margine inferiore per legenda */
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #b0c4de;
+            padding: 8px 10px;
+            text-align: left;
+            vertical-align: top;
+            font-size: 0.85em;
+        }
+        th {
+            background-color: #e6f0fa;
+            color: #2c3e50;
+            font-weight: bold;
+            text-align: center;
+        }
+        td.treatment-name {
+            font-weight: bold;
+            min-width: 150px;
+        }
+        td.phase-cell {
+            min-width: 120px;
+        }
+        .diagram-cell {
+            width: 250px;
+            height: 180px;
+            padding: 5px;
+            cursor: pointer;
+        }
+        .diagram-cell:hover .diagram-container {
+            border-color: #007bff;
+        }
+        .diagram-container {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        .axis-line { stroke: #555; stroke-width: 1; }
+        .axis-label { font-size: 9px; fill: #444; }
+        .tick-label { font-size: 8px; fill: #555; }
+        .grid-line { stroke: #e0e0e0; stroke-width: 0.5; stroke-dasharray: 2,2; }
+        .temperature-path { fill: none; stroke: #007bff; stroke-width: 1.8; }
+        .path-point-marker { fill: #007bff; stroke: white; stroke-width: 1; }
+        .critical-temp-line { stroke-width: 0.8; stroke-dasharray: 4, 2; opacity: 0.9; }
+        .critical-temp-label { font-size: 8px; font-weight: bold; text-anchor: end; fill-opacity: 0.9;}
+        .temp-label-on-path { font-size: 8px; font-weight: bold; text-anchor: middle; fill: #0056b3;}
+
+        /* Stili per il Modal */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: #fefefe; margin: auto; padding: 25px; border: 1px solid #888;
+            border-radius: 8px; width: 90%; max-width: 1000px; box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-title { font-size: 1.5em; color: #2c3e50; margin: 0; }
+        .close-button { color: #aaa; font-size: 32px; font-weight: bold; cursor: pointer; padding: 0 10px; }
+        .close-button:hover, .close-button:focus { color: #333; text-decoration: none; }
+        .modal-body { display: flex; flex-direction: row; gap: 25px; }
+        .modal-diagram-container { flex: 2; min-width: 400px; height: 450px; border: 1px solid #ccc; }
+        .modal-phases-container { flex: 1; overflow-y: auto; max-height: 450px; padding-right: 10px; }
+        .modal-phases-container h4 { margin-top: 0; color: #2c3e50; font-size: 1.2em; }
+        .modal-phases-list { list-style-type: decimal; padding-left: 20px; font-size: 0.95em; }
+        .modal-phases-list li { margin-bottom: 8px; }
+
+        @media (max-width: 768px) {
+            .modal-content { width: 95%; padding: 15px; }
+            .modal-body { flex-direction: column; }
+            .modal-diagram-container { min-width: auto; height: 300px; }
+            .modal-phases-container { max-height: 250px; }
+        }
+
+        /* Legenda Sigle Temperature Critiche */
+        .critical-temps-legend {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            font-size: 0.9em;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .critical-temps-legend h4 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+        .critical-temps-legend ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .critical-temps-legend li {
+            display: flex;
+            align-items: center;
+        }
+        .legend-color-box {
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border: 1px solid #777;
+            display: inline-block;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Compilazione Tabella Trattamenti Termici</h1>
+    <p class="instructions">
+        <span style="color: #007bff; font-weight: bold;">•</span>
+        Compilare la tabella precisando per ogni trattamento termico, riportato sulla prima colonna, le rispettive fasi operative e disegnando nell'ultima colonna il relativo schema grafico tempo-temperature. (Clicca sul grafico per ingrandirlo).
+    </p>
+
+    <table id="treatmentsTable">
+        <thead>
+            <tr>
+                <th>Trattamento</th>
+                <th>Fase 1</th>
+                <th>Fase 2</th>
+                <th>Fase 3</th>
+                <th>Fase 4</th>
+                <th>Fase 5</th>
+                <th>Schema grafico<br>tempo-temperatura</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Righe popolate da JavaScript -->
+        </tbody>
+    </table>
+
+    <div class="critical-temps-legend">
+        <h4>Legenda Temperature Critiche (Acciai):</h4>
+        <ul id="criticalTempsLegendList"></ul>
+    </div>
+
+    <div id="treatmentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle" class="modal-title">Dettaglio Trattamento</h2>
+                <span class="close-button" id="closeModalButton">×</span>
+            </div>
+            <div class="modal-body">
+                <div id="modalDiagram" class="modal-diagram-container"></div>
+                <div class="modal-phases-container">
+                    <h4>Fasi Operative:</h4>
+                    <ul id="modalPhasesList" class="modal-phases-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CRITICAL_TEMPS_STEEL = {
+            AC1: { value: 723, color: '#e74c3c', label: 'Ac₁', description: 'Inizio Austenitizzazione' },
+            AC3: { value: 850, color: '#f39c12', label: 'Ac₃', description: 'Fine Austenitizzazione (Acc. Ipoeut.)' }, // Valore leggermente abbassato per rappresentazione generica
+            ACM: { value: 1147, color: '#2980b9', label: 'Acm', description: 'Solubilità Cementite (Acc. Ipereut.)' },
+            MS: { value: 230, color: '#9b59b6', label: 'Ms', description: 'Inizio Martensite' },
+            MF: { value: 100, color: '#2ecc71', label: 'Mf', description: 'Fine Martensite' }
+        };
+
+        const treatmentsData = [
+            {
+                nome: "Tempra diretta",
+                fasi: [
+                    "Riscaldamento a T di austenitizzazione (es. 30-50°C sopra Ac₃ per acciai ipoeutettoidici, o sopra Ac₁ per ipereutettoidici).",
+                    "Permanenza per completa austenitizzazione e omogeneizzazione.",
+                    "Raffreddamento rapido (acqua, olio, polimeri) a velocità > Vcritica per ottenere martensite.",
+                    "", ""
+                ],
+                puntiGrafico: [ [0, 20], [25,CRITICAL_TEMPS_STEEL.AC3.value + 40], [50,CRITICAL_TEMPS_STEEL.AC3.value + 40], [60, CRITICAL_TEMPS_STEEL.MF.value -20] ],
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1', 'AC3', 'MS', 'MF']
+            },
+            {
+                nome: "Tempra differita o scalare",
+                fasi: [
+                    "Riscaldamento a T di austenitizzazione (> Ac₃/Acm).",
+                    "Permanenza per austenitizzazione completa.",
+                    "Raffreddamento rapido in bagno (sale fuso, olio caldo) a T leggermente superiore a Ms (es. T per bainite/martempering).",
+                    "Mantenimento isotermo alla T del bagno per uniformare la temperatura nel pezzo ed eventuale trasformazione bainitica.",
+                    "Raffreddamento finale (solitamente in aria) attraverso l'intervallo Ms-Mf."
+                ],
+                puntiGrafico: [ [0,20], [15,CRITICAL_TEMPS_STEEL.AC3.value + 40], [30,CRITICAL_TEMPS_STEEL.AC3.value + 40], [40, CRITICAL_TEMPS_STEEL.MS.value + 30], [70,CRITICAL_TEMPS_STEEL.MS.value + 30], [85, CRITICAL_TEMPS_STEEL.MF.value -20] ],
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1', 'AC3', 'MS', 'MF']
+            },
+            {
+                nome: "Rinvenimento",
+                fasi: [
+                    "Riscaldamento del pezzo temprato a T < Ac₁ (tipicamente 150-650°C a seconda delle proprietà desiderate).",
+                    "Mantenimento alla temperatura di rinvenimento per il tempo necessario a modificare la microstruttura martensitica.",
+                    "Raffreddamento, solitamente in aria calma o altro mezzo appropriato.",
+                    "", ""
+                ],
+                puntiGrafico: [ [0,20], [25,450], [75,450], [100,20] ],
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1']
+            },
+            {
+                nome: "Bonifica",
+                fasi: [
+                    "Tempra: Riscaldamento a T di austenitizzazione (> Ac₃/Acm) e mantenimento.",
+                    "Tempra: Raffreddamento rapido per ottenere martensite.",
+                    "Rinvenimento: Riscaldamento a T < Ac₁ (generalmente 500-680°C per acciai da bonifica).",
+                    "Rinvenimento: Mantenimento alla temperatura di rinvenimento.",
+                    "Rinvenimento: Raffreddamento (in aria o altro mezzo, a volte controllato per evitare fragilità da rinvenimento)."
+                ],
+                puntiGrafico: [ [0,20], [10,CRITICAL_TEMPS_STEEL.AC3.value+40], [20,CRITICAL_TEMPS_STEEL.AC3.value+40], [28,20], [40,580], [65,580], [80,20] ],
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1', 'AC3', 'MS', 'MF']
+            },
+            {
+                nome: "Ricottura",
+                fasi: [
+                    "Riscaldamento a T opportuna (es. sopra Ac₃/Acm per ricottura completa, o tra Ac₁ e Ac₃ per incompleta).",
+                    "Mantenimento per completa trasformazione e/o omogeneizzazione e/o ricristallizzazione.",
+                    "Raffreddamento molto lento (solitamente in forno spento) per ottenere una struttura equilibrata e priva di tensioni.",
+                    "", ""
+                ],
+                puntiGrafico: [ [0,20], [25,CRITICAL_TEMPS_STEEL.AC3.value + 50], [65, CRITICAL_TEMPS_STEEL.AC3.value + 50], [100,150], [110,20] ], // Raffreddamento molto lento
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1', 'AC3', 'ACM']
+            },
+            {
+                nome: "Carbocementazione",
+                fasi: [
+                    "Riscaldamento del pezzo in acciaio a basso C in atmosfera carburante (ricca di CO o idrocarburi) a T elevata (tip. 880-980°C).",
+                    "Mantenimento per consentire la diffusione del carbonio nello strato superficiale del pezzo.",
+                    "Il grafico mostra la fase di arricchimento e un raffreddamento iniziale. Segue tipicamente un ciclo di tempra e rinvenimento dello strato cementato.",
+                    "", ""
+                ],
+                puntiGrafico: [ [0,20], [20,920], [70,920], [85,600], [95,20] ], // Mostra solo cementazione e raffreddamento lento
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1', 'AC3']
+            },
+            {
+                nome: "Nitrurazione",
+                fasi: [
+                    "Riscaldamento del pezzo (generalmente acciaio da nitrurazione, già bonificato) in atmosfera di ammoniaca dissociata a T < Ac₁ (tip. 500-590°C).",
+                    "Mantenimento prolungato (anche decine di ore) per la diffusione dell'azoto e la formazione di nitruri duri superficiali.",
+                    "Raffreddamento lento, generalmente non critico (non si forma martensite).",
+                    "", ""
+                ],
+                puntiGrafico: [ [0,20], [15,530], [85,530], [100,20] ], // Mantenimento lungo
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1']
+            },
+            {
+                nome: "Carbonitrurazione",
+                fasi: [
+                    "Riscaldamento in atmosfera che cede sia carbonio che azoto (es. miscela di gas carburanti e ammoniaca), a T tip. 800-900°C (tra Ac₁ e Ac₃ o sopra Ac₃).",
+                    "Mantenimento per arricchimento superficiale di C e N (processo più rapido della carbocementazione, strati più sottili).",
+                    "Raffreddamento rapido (Tempra) direttamente dal forno o dopo breve equalizzazione a T inferiore.",
+                    "Rinvenimento a bassa temperatura (es. 150-200°C) per ridurre le tensioni e migliorare la tenacità.",
+                    ""
+                ],
+                puntiGrafico: [ [0,20],[15,860],[50,860],[58,20],[70,180],[85,180],[95,20] ],
+                mostraLineeCriticheAcciaio: true,
+                lineeCriticheSpec: ['AC1','AC3']
+            },            
+            {
+                nome: "Ricottura completa leghe di alluminio",
+                fasi: [
+                    "Riscaldamento a temperatura di ricottura specifica per la lega (es. leghe da lavorazione plastica incrudite: 300-415°C).",
+                    "Permanenza alla temperatura per ricristallizzazione (eliminazione incrudimento) o per coalescenza dei precipitati.",
+                    "Raffreddamento, la cui velocità può variare: lento per ottenere la massima lavorabilità, o più rapido per alcune leghe.",
+                    "", ""
+                ],
+                puntiGrafico: [ [0,20], [25,380], [75,380], [100,20] ],
+                mostraLineeCriticheAcciaio: false
+            },
+            {
+                nome: "Bonifica degli ottoni",
+                fasi: [
+                    "Solubilizzazione: Riscaldamento a T elevata (es. 750-850°C per ottoni speciali induribili), specifica per la lega, nel campo monofasico alfa.",
+                    "Mantenimento per completa dissoluzione degli elementi di lega (es. Al, Si).",
+                    "Tempra di Soluzione: Raffreddamento rapido (solitamente in acqua) per trattenere la soluzione solida sovrassatura.",
+                    "Invecchiamento Artificiale: Riscaldamento a T inferiore (es. 300-500°C) per provocare la precipitazione controllata di fasi indurenti.",
+                    "Raffreddamento finale (velocità solitamente non critica)."
+                ],
+                puntiGrafico: [ [0,20], [15,800], [35,800], [40,20], [55,400], [80,400], [95,20] ],
+                mostraLineeCriticheAcciaio: false
+            },
+            {
+                nome: "Bonifica dei bronzi",
+                fasi: [
+                    "Solubilizzazione: Riscaldamento a T elevata (es. bronzi all'Al 780-980°C, bronzi al Be 760-800°C), nel campo monofasico.",
+                    "Mantenimento per completa dissoluzione degli elementi di lega (Al, Be, etc.).",
+                    "Tempra di Soluzione: Raffreddamento rapido (acqua) per soluzione solida sovrassatura.",
+                    "Invecchiamento Artificiale: Riscaldamento a T inferiore (es. bronzi Al 300-650°C, bronzi Be 300-480°C) per precipitazione indurente.",
+                    "Raffreddamento finale."
+                ],
+                puntiGrafico: [ [0,20], [15,880], [35,880], [40,20], [55,420], [80,420], [95,20] ],
+                mostraLineeCriticheAcciaio: false
+            }
+        ];
+
+        function createSVGDiagram(treatment, isModal = false) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            const pTop = isModal ? 30 : 15;
+            const pRight = isModal ? 55 : 30;
+            const pBottom = isModal ? 40 : 25;
+            const pLeft = isModal ? 50 : 30;
+
+            const svgWidth = isModal ? 600 : 240;
+            const svgHeight = isModal ? 450 : 170;
+            svg.setAttribute("viewBox", `0 0 ${svgWidth} ${svgHeight}`);
+
+            const chartWidth = svgWidth - pLeft - pRight;
+            const chartHeight = svgHeight - pTop - pBottom;
+
+            const allTemps = treatment.puntiGrafico.map(p => p[1]);
+            if (treatment.mostraLineeCriticheAcciaio && treatment.lineeCriticheSpec) {
+                treatment.lineeCriticheSpec.forEach(key => {
+                    if (CRITICAL_TEMPS_STEEL[key]) allTemps.push(CRITICAL_TEMPS_STEEL[key].value);
+                });
+            }
+            allTemps.push(0); // Ensure 0 is considered for minTemp
+
+            const minTemp = 0;
+            let calculatedMaxTemp = Math.max(...allTemps);
+            if (treatment.nome.includes("bronzi")) calculatedMaxTemp = Math.max(calculatedMaxTemp, 900); // Ensure scale for bronzes
+            else if (treatment.nome.includes("ottoni")) calculatedMaxTemp = Math.max(calculatedMaxTemp, 850);
+            else if (treatment.nome.includes("Carbocementazione") || treatment.nome.includes("Carbonitrurazione") || treatment.nome.includes("Tempra") || treatment.nome.includes("Bonifica") && !treatment.nome.includes("ottoni") && !treatment.nome.includes("bronzi") || treatment.nome.includes("Ricottura") && !treatment.nome.includes("alluminio")) {
+                calculatedMaxTemp = Math.max(calculatedMaxTemp, 950); // Default max for steels
+            } else if (treatment.nome.includes("Rinvenimento")) {
+                 calculatedMaxTemp = Math.max(calculatedMaxTemp, 700);
+            } else if (treatment.nome.includes("alluminio")) {
+                 calculatedMaxTemp = Math.max(calculatedMaxTemp, 450);
+            }
+
+
+            const maxTemp = calculatedMaxTemp > 0 ? Math.ceil(calculatedMaxTemp / (isModal ? 50 : 100)) * (isModal ? 50 : 100) + (isModal ? 25 : 50) : 500;
+            const tempRange = maxTemp - minTemp;
+            const maxTime = Math.max(100, ...treatment.puntiGrafico.map(p => p[0]));
+
+            const getSvgX = (time) => pLeft + (time / maxTime) * chartWidth;
+            const getSvgY = (temp) => pTop + chartHeight - ((Math.max(minTemp, temp) - minTemp) / tempRange) * chartHeight;
+
+            const numHGrid = isModal ? Math.min(10, Math.floor(tempRange/50)) : Math.min(5, Math.floor(tempRange/100));
+            const numVGrid = isModal ? 10 : 5;
+
+            for (let i = 0; i <= numHGrid; i++) {
+                const tempVal = minTemp + i * (tempRange / numHGrid);
+                const y = getSvgY(tempVal);
+                const lineH = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                lineH.setAttribute("x1", pLeft); lineH.setAttribute("y1", y);
+                lineH.setAttribute("x2", pLeft + chartWidth); lineH.setAttribute("y2", y);
+                lineH.setAttribute("class", "grid-line"); svg.appendChild(lineH);
+            }
+            for (let i = 0; i <= numVGrid; i++) {
+                const x = getSvgX(i * (maxTime / numVGrid));
+                const lineV = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                lineV.setAttribute("x1", x); lineV.setAttribute("y1", pTop);
+                lineV.setAttribute("x2", x); lineV.setAttribute("y2", pTop + chartHeight);
+                lineV.setAttribute("class", "grid-line"); svg.appendChild(lineV);
+            }
+
+            const xAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            xAxis.setAttribute("x1", pLeft); xAxis.setAttribute("y1", getSvgY(minTemp));
+            xAxis.setAttribute("x2", pLeft + chartWidth); xAxis.setAttribute("y2", getSvgY(minTemp));
+            xAxis.setAttribute("class", "axis-line"); svg.appendChild(xAxis);
+            const yAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            yAxis.setAttribute("x1", pLeft); yAxis.setAttribute("y1", pTop);
+            yAxis.setAttribute("x2", pLeft); yAxis.setAttribute("y2", pTop + chartHeight);
+            yAxis.setAttribute("class", "axis-line"); svg.appendChild(yAxis);
+
+            const xLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            xLabel.setAttribute("x", pLeft + chartWidth / 2);
+            xLabel.setAttribute("y", svgHeight - pBottom + (isModal ? 25 : 15));
+            xLabel.setAttribute("text-anchor", "middle"); xLabel.setAttribute("class", "axis-label");
+            xLabel.style.fontSize = isModal ? "12px" : "9px";
+            xLabel.textContent = "Tempo (t)"; svg.appendChild(xLabel);
+
+            const yLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            const yLabelX = pLeft - (isModal ? 35 : 22);
+            yLabel.setAttribute("x", yLabelX );
+            yLabel.setAttribute("y", pTop + chartHeight / 2);
+            yLabel.setAttribute("text-anchor", "middle"); yLabel.setAttribute("class", "axis-label");
+            yLabel.style.fontSize = isModal ? "12px" : "9px";
+            yLabel.setAttribute("transform", `rotate(-90, ${yLabelX}, ${pTop + chartHeight / 2})`);
+            yLabel.textContent = "Temperatura (°C)"; svg.appendChild(yLabel);
+
+            for (let i = 0; i <= numHGrid; i++) {
+                const tempVal = Math.round(minTemp + i * (tempRange / numHGrid));
+                 if (tempVal <= maxTemp && tempVal >= minTemp) {
+                    const yPos = getSvgY(tempVal);
+                    const textNode = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    textNode.setAttribute("x", pLeft - 5); textNode.setAttribute("y", yPos + 4);
+                    textNode.setAttribute("text-anchor", "end"); textNode.setAttribute("class", "tick-label");
+                    textNode.style.fontSize = isModal ? "10px" : "8px";
+                    textNode.textContent = tempVal; svg.appendChild(textNode);
+                 }
+            }
+
+            if (treatment.mostraLineeCriticheAcciaio && treatment.lineeCriticheSpec) {
+                treatment.lineeCriticheSpec.forEach(key => {
+                    const ct = CRITICAL_TEMPS_STEEL[key];
+                    if (ct && ct.value < maxTemp && ct.value >= minTemp) {
+                        const y = getSvgY(ct.value);
+                        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+                        line.setAttribute("x1", pLeft); line.setAttribute("y1", y);
+                        line.setAttribute("x2", pLeft + chartWidth); line.setAttribute("y2", y);
+                        line.setAttribute("stroke", ct.color);
+                        line.setAttribute("class", "critical-temp-line");
+                        line.style.strokeWidth = isModal ? "1.2px" : "0.8px";
+                        svg.appendChild(line);
+
+                        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                        label.setAttribute("x", pLeft + chartWidth + (isModal ? 15 : 10));
+                        label.setAttribute("y", y + (isModal ? 4 : 3));
+                        label.setAttribute("fill", ct.color);
+                        label.setAttribute("class", "critical-temp-label");
+                        label.style.fontSize = isModal ? "11px" : "8px";
+                        label.style.textAnchor = "start";
+                        label.textContent = ct.label;
+                        svg.appendChild(label);
+                    }
+                });
+            }
+
+            const pathData = treatment.puntiGrafico.map((point, i) => {
+                const x = getSvgX(point[0]);
+                const y = getSvgY(point[1]);
+                return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+            }).join(' ');
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", pathData);
+            path.setAttribute("class", "temperature-path");
+            path.style.strokeWidth = isModal ? "2.5px" : "1.8px";
+            svg.appendChild(path);
+
+            treatment.puntiGrafico.forEach((point) => {
+                const x = getSvgX(point[0]);
+                const y = getSvgY(point[1]);
+                const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                circle.setAttribute("cx", x); circle.setAttribute("cy", y);
+                circle.setAttribute("r", isModal ? "3.5" : "2.5");
+                circle.setAttribute("class", "path-point-marker"); svg.appendChild(circle);
+            });
+
+            for (let i = 0; i < treatment.puntiGrafico.length - 1; i++) {
+                const p1 = treatment.puntiGrafico[i];
+                const p2 = treatment.puntiGrafico[i+1];
+                // Condizione per plateau: stessa temperatura, diversa coordinata temporale, temperatura > minTemp+10 e < maxTemp
+                if (Math.abs(p1[1] - p2[1]) < 1 && p1[1] > minTemp + 10 && p1[0] !== p2[0] && p1[1] < maxTemp ) {
+                    const x = getSvgX((p1[0] + p2[0]) / 2);
+                    const y = getSvgY(p1[1]);
+                    const tempLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    tempLabel.setAttribute("x", x); tempLabel.setAttribute("y", y - (isModal ? 8 : 4));
+                    tempLabel.setAttribute("class", "temp-label-on-path");
+                    tempLabel.style.fontSize = isModal ? "11px" : "8px";
+                    tempLabel.textContent = `${Math.round(p1[1])}°`;
+                    svg.appendChild(tempLabel);
+                }
+            }
+            return svg;
+        }
+
+        const tableBody = document.getElementById('treatmentsTable').getElementsByTagName('tbody')[0];
+        const modal = document.getElementById('treatmentModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalDiagramContainer = document.getElementById('modalDiagram');
+        const modalPhasesList = document.getElementById('modalPhasesList');
+        const closeModalButton = document.getElementById('closeModalButton');
+        const criticalTempsLegendUl = document.getElementById('criticalTempsLegendList');
+
+        Object.values(CRITICAL_TEMPS_STEEL).forEach(ct => {
+            const listItem = document.createElement('li');
+            const colorBox = document.createElement('span');
+            colorBox.className = 'legend-color-box';
+            colorBox.style.backgroundColor = ct.color;
+            listItem.appendChild(colorBox);
+            listItem.appendChild(document.createTextNode(`${ct.label}: ${ct.description}`));
+            criticalTempsLegendUl.appendChild(listItem);
+        });
+
+
+        treatmentsData.forEach(data => {
+            const row = tableBody.insertRow();
+            row.insertCell().textContent = data.nome;
+            row.cells[0].classList.add("treatment-name");
+
+            data.fasi.forEach(faseText => {
+                const cell = row.insertCell();
+                cell.textContent = faseText;
+                cell.classList.add("phase-cell");
+            });
+
+            const diagramCell = row.insertCell();
+            diagramCell.classList.add("diagram-cell");
+            const diagramContainer = document.createElement('div');
+            diagramContainer.classList.add("diagram-container");
+            const svg = createSVGDiagram(data, false);
+            diagramContainer.appendChild(svg);
+            diagramCell.appendChild(diagramContainer);
+
+            diagramCell.addEventListener('click', () => {
+                modalTitle.textContent = data.nome;
+                modalDiagramContainer.innerHTML = '';
+                const enlargedSvg = createSVGDiagram(data, true);
+                modalDiagramContainer.appendChild(enlargedSvg);
+                modalPhasesList.innerHTML = '';
+                data.fasi.forEach(fase => {
+                    if (fase && fase.trim() !== "") {
+                        const listItem = document.createElement('li');
+                        listItem.textContent = fase;
+                        modalPhasesList.appendChild(listItem);
+                    }
+                });
+                modal.style.display = "flex";
+            });
+        });
+
+        closeModalButton.onclick = function() { modal.style.display = "none"; }
+        window.onclick = function(event) { if (event.target == modal) { modal.style.display = "none"; } }
+    </script>
+</body>
+</html>
